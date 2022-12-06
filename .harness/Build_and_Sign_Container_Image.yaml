@@ -39,7 +39,7 @@ pipeline:
                         --impersonate-service-account "$SA_NAME"
                     envVariables:
                       SA_NAME: sk-devrel@pratyakshika.iam.gserviceaccount.com
-                      GOOGLE_APPLICATION_CREDENTIALS: <+secrets.get.('SAskdevrel')>
+                      GOOGLE_APPLICATION_CREDENTIALS: <+secrets.get('SAskdevrel')>
                     imagePullPolicy: IfNotPresent
           platform:
             os: Linux
