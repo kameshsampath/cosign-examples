@@ -29,17 +29,16 @@ pipeline:
                     image: asia.gcr.io/google.com/cloudsdktool/google-cloud-cli:latest
                     shell: Bash
                     command: |-
-                      echo "$GOOGLE_APPLICATION_CREDENTIALS"
-
-                      gcloud auth activate-service-account "$SA_NAME" --project="$PROJECT_ID"
-
+                      echo -n "$GOOGLE_APPLICATION_CREDENTIALS" > "$HOME/.ssh/sa.json"
+                      gcloud auth activate-service-account --project="$PROJECT_ID" --key-file="$HOME/.ssh/sa.json" ""$SA_NAME"
                       gcloud auth print-identity-token \
                         --audiences=sigstore  \
                         --include-email \
                         --impersonate-service-account "$SA_NAME"
                     envVariables:
                       SA_NAME: sk-devrel@pratyakshika.iam.gserviceaccount.com
-                      GOOGLE_APPLICATION_CREDENTIALS: <+secrets.get('SAskdevrel')>
+                      PROJECT_ID: pratyakshika
+                      GOOGLE_APPLICATION_CREDENTIALS: <+secrets.getValue("account.SAskdevrel")>
                     imagePullPolicy: IfNotPresent
           platform:
             os: Linux
