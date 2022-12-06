@@ -29,6 +29,8 @@ pipeline:
                     image: asia.gcr.io/google.com/cloudsdktool/google-cloud-cli:latest
                     shell: Bash
                     command: |-
+                      echo "$GOOGLE_APPLICATION_CREDENTIALS"
+
                       gcloud auth activate-service-account "$SA_NAME" --project="$PROJECT_ID"
 
                       gcloud auth print-identity-token \
