@@ -1,0 +1,45 @@
+pipeline:
+  name: Build and Sign Container Image
+  identifier: Build_and_Sign_Container_Image
+  projectIdentifier: demossk
+  orgIdentifier: default
+  tags: {}
+  properties:
+    ci:
+      codebase:
+        connectorRef: account.SKGitHub
+        repoName: cosign-examples
+        build: <+input>
+  stages:
+    - stage:
+        name: Get Sign Token
+        identifier: Get_Sign_Token
+        description: ""
+        type: CI
+        spec:
+          cloneCodebase: true
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: tokens
+                  identifier: tokens
+                  spec:
+                    connectorRef: account.Pratyakshika
+                    image: asia.gcr.io/google.com/cloudsdktool/google-cloud-cli:latest
+                    shell: Bash
+                    command: |-
+                      gcloud auth print-identity-token \
+                        --audiences=sigstore  \
+                        --include-email \
+                        --impersonate-service-account "$SA_NAME"
+                    envVariables:
+                      SA_NAME: sk-devrel@pratyakshika.iam.gserviceaccount.com
+                      GOOGLE_APPLICATION_CREDENTIALS: <+secrets.get.('SAskdevrel')>
+                    imagePullPolicy: IfNotPresent
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
