@@ -12,9 +12,9 @@ pipeline:
         build: <+input>
   stages:
     - stage:
-        name: Get Sign Token
-        identifier: Get_Sign_Token
-        description: ""
+        name: Build Image
+        identifier: Build_Image
+        description: Build a container image using ko-build and sign the image using cosign with GCP identity token
         type: CI
         spec:
           cloneCodebase: true
@@ -22,24 +22,71 @@ pipeline:
             steps:
               - step:
                   type: Run
+                  name: ko
+                  identifier: ko
+                  spec:
+                    connectorRef: account.MyDockerHub
+                    image: kameshsampath/kube-dev-tools:0.1.4
+                    shell: Bash
+                    command: |-
+                      echo -n "$IMAGE_REGISTRY_PASSWORD" \
+                        | ko auth login "$IMAGE_REGISTRY" -u "$IMAGE_REGISTRY_USER" --password-stdin
+                      IMAGE_REF=$(ko build --bare \
+                        --platform=linux/arm64 \
+                        --platform=linux/amd64 ./cmd/server)
+                    envVariables:
+                      KO_DOCKER_REPO: docker.io/kameshsampath/cosign-example
+                      IMAGE_REGISTRY: docker.io
+                      IMAGE_REGISTRY_USER: <+secrets.getValue("account.DockerHubUserName")>
+                      IMAGE_REGISTRY_PASSWORD: <+secrets.getValue("account.DockerHubPassword")>
+                    outputVariables:
+                      - name: IMAGE_REF
+                    imagePullPolicy: IfNotPresent
+                  description: build image using ko-build
+              - step:
+                  type: Run
                   name: tokens
                   identifier: tokens
                   spec:
                     connectorRef: account.Pratyakshika
-                    image: asia.gcr.io/google.com/cloudsdktool/google-cloud-cli:latest
+                    image: asia.gcr.io/google.com/cloudsdktool/google-cloud-cli@sha256:9b89a16f09c59aaa8fe0b496afadad4d41aa84f9f93b81263ea63e890f78291b
                     shell: Bash
                     command: |-
-                      echo -n "$GOOGLE_APPLICATION_CREDENTIALS" > "$HOME/.ssh/sa.json"
-                      gcloud auth activate-service-account --project="$PROJECT_ID" --key-file="$HOME/.ssh/sa.json" ""$SA_NAME"
-                      gcloud auth print-identity-token \
+                      echo -n "$GOOGLE_APPLICATION_CREDENTIALS" > "$HOME/sa.json"
+                      chmod 0700 "$HOME/sa.json"
+                      gcloud auth activate-service-account --project="$GCP_PROJECT" --key-file="$HOME/sa.json" "$GCP_SA"
+                      id_token=$(gcloud auth print-identity-token \
                         --audiences=sigstore  \
                         --include-email \
-                        --impersonate-service-account "$SA_NAME"
+                        --impersonate-service-account "$GCP_SA")
                     envVariables:
-                      SA_NAME: sk-devrel@pratyakshika.iam.gserviceaccount.com
-                      PROJECT_ID: pratyakshika
+                      GCP_SA: <+secrets.getValue("account.SK_GCP_DEFAULT_SA")>
+                      GCP_PROJECT: <+secrets.getValue("account.SK_GCP_DEFAULT_PROJECT")>
                       GOOGLE_APPLICATION_CREDENTIALS: <+secrets.getValue("account.SAskdevrel")>
+                    outputVariables:
+                      - name: id_token
                     imagePullPolicy: IfNotPresent
+              - step:
+                  type: Run
+                  name: cosign
+                  identifier: cosign
+                  spec:
+                    connectorRef: account.MyDockerHub
+                    image: kameshsampath/kube-dev-tools:0.1.4
+                    shell: Bash
+                    command: |-
+                      echo -n "$IMAGE_REGISTRY_PASSWORD" \
+                        | docker login "$IMAGE_REGISTRY" -u "$IMAGE_REGISTRY_USER" --password-stdin
+                      cosign sign --identity-token="<+steps.tokens.output.outputVariables.id_token>" <+steps.ko.output.outputVariables.IMAGE_REF>
+                    envVariables:
+                      COSIGN_EXPERIMENTAL: "1"
+                      IMAGE_REGISTRY: docker.io
+                      IMAGE_REGISTRY_USER: <+secrets.getValue("account.DockerHubUserName")>
+                      IMAGE_REGISTRY_PASSWORD: <+secrets.getValue("account.DockerHubPassword")>
+                    outputVariables:
+                      - name: IMAGE_REF
+                    imagePullPolicy: IfNotPresent
+                  description: sign the container image using cosign
           platform:
             os: Linux
             arch: Amd64
